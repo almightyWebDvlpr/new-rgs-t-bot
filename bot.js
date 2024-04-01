@@ -1,6 +1,14 @@
 const TelegramBot = require("node-telegram-bot-api");
 const axios = require("axios");
-
+const {
+  mainMenuKeyboard,
+  instructionsMenuKeyboard,
+  infoMenuKeyboard,
+  exercisesMenuKeyboard,
+  trainingEcercisesMobile,
+} = require("./botComponents/menus.js");
+const { generateMenuMarkup } = require("./botComponents/dateMenu.js");
+const { saveClickedButton } = require("./models/clickedButtonsModel.js");
 module.exports = function (io) {
   const token = process.env.TELEGRAM_TOKEN;
 
@@ -22,72 +30,6 @@ module.exports = function (io) {
     { command: "menu", description: "Меню" },
   ];
   bot.setMyCommands(commands);
-
-  const mainMenuKeyboard = [
-    ["📝 Запит на навчання", "🆘 Запит технічної допомоги"],
-    ["ℹ️ Корисна інформація", "📖 Інструкції"],
-    ["☎️ Контакт служби підтримки"],
-    ["❌ Закрити меню"],
-  ];
-
-  const instructionsMenuKeyboard = [
-    ["🩺💻 Інструкція для кабінету лікаря"],
-    ["🧑🏻‍⚕️💻 Інструкція для кабінету пацієнта до пк"],
-    ["🧑🏻‍⚕️📱 Інструкція для пацієнта до мобільного пристрою"],
-    ["⬅️ Повернутися до головного меню"],
-  ];
-
-  const infoMenuKeyboard = [
-    ["⚖️ Законодавство"],
-    ["▶️ Youtube канал"],
-    ["⬅️ Повернутися до головного меню"],
-  ];
-
-  const generateMenuMarkup = (year, month) => {
-    const daysInMonth = new Date(year, month, 0).getDate(); // Get the number of days in the specified month
-    const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1); // Create an array of days in the month
-
-    // Divide the days into rows of 7 buttons per row
-    const rows = [];
-    for (let i = 0; i < daysArray.length; i += 7) {
-      rows.push(daysArray.slice(i, i + 7));
-    }
-
-    // Generate markup for each row of buttons
-    const markupRows = rows.map((row) => {
-      return row.map((day) => {
-        return {
-          text: day.toString(), // Button text is the day number
-          callback_data: `select_date_${year}-${month
-            .toString()
-            .padStart(2, "0")}-${day.toString().padStart(2, "0")}`, // Callback data contains the selected date
-        };
-      });
-    });
-
-    // Generate buttons for navigation to previous and next months
-    const prevMonth = month === 1 ? 12 : month - 1;
-    const prevYear = month === 1 ? year - 1 : year;
-    const nextMonth = month === 12 ? 1 : month + 1;
-    const nextYear = month === 12 ? year + 1 : year;
-
-    const prevMonthButton = {
-      text: "◀️",
-      callback_data: `navigate_month_${prevYear}-${prevMonth
-        .toString()
-        .padStart(2, "0")}`,
-    };
-    const nextMonthButton = {
-      text: "▶️",
-      callback_data: `navigate_month_${nextYear}-${nextMonth
-        .toString()
-        .padStart(2, "0")}`,
-    };
-
-    markupRows.push([prevMonthButton, nextMonthButton]);
-
-    return markupRows; // Return the array of arrays representing rows of buttons
-  };
 
   // Function to wait for user response
   function waitForReply(chatId) {
@@ -199,7 +141,11 @@ module.exports = function (io) {
   async function sendMainMenuMessage(msg) {
     await bot.sendMessage(msg.chat.id, `Меню бота`, {
       force_reply: true,
-      reply_markup: { keyboard: mainMenuKeyboard, resize_keyboard: false },
+      reply_markup: {
+        keyboard: mainMenuKeyboard,
+        resize_keyboard: false,
+        one_time_keyboard: true,
+      },
     });
   }
   async function closeMenu(msg) {
@@ -329,7 +275,10 @@ module.exports = function (io) {
       );
       await sendNotification(response.data);
       console.log("Response from Express.js:", response.data);
-      bot.sendMessage(msg.chat.id, "Дякуємо за запит! Запрошеня на навчання буде надіслано всім учасникам на електронну пошту.");
+      bot.sendMessage(
+        msg.chat.id,
+        "Дякуємо за запит! Запрошеня на навчання буде надіслано всім учасникам на електронну пошту."
+      );
     } catch (error) {
       console.error("Error sending data to Express.js:", error);
     }
@@ -356,6 +305,19 @@ module.exports = function (io) {
       {
         reply_markup: {
           keyboard: instructionsMenuKeyboard,
+          resize_keyboard: true,
+        },
+      }
+    );
+  }
+
+  async function sendExercisesInfo(msg) {
+    await bot.sendMessage(
+      msg.chat.id,
+      "Тут Ви зможете знайти інформацію по вправах відповідно діагнозу.",
+      {
+        reply_markup: {
+          keyboard: exercisesMenuKeyboard,
           resize_keyboard: true,
         },
       }
@@ -402,6 +364,33 @@ module.exports = function (io) {
     await bot.sendMessage(msg.chat.id, linkToYoutube, { parse_mode: "HTML" });
   }
 
+  async function sendMasterClassesList(msg, text) {
+    await bot.sendMessage(
+      msg.chat.id,
+      `<b>Розклад майстер-класів</b>
+
+- Четвер, 7 березня⋅16:00 – 17:30
+- Четвер, 21 березня⋅16:00 – 17:30
+- Четвер, 4 квітня⋅16:00 – 17:30 
+<a href="https://meet.google.com/urx-xaoo-azg">Посилання на відеодзвінок</a>\n
+- Четвер, 18 квітня⋅16:00 – 17:30
+<a href="https://meet.google.com/urx-xaoo-azg">Посилання на відеодзвінок</a>\n
+- Четвер, 2 травня⋅16:00 – 17:30
+<a href="https://meet.google.com/urx-xaoo-azg">Посилання на відеодзвінок</a>\n
+- Четвер, 16 травня⋅16:00 – 17:30
+<a href="https://meet.google.com/urx-xaoo-azg">Посилання на відеодзвінок</a>\n
+- Четвер, 30 травня⋅16:00 – 17:30
+<a href="https://meet.google.com/urx-xaoo-azg">Посилання на відеодзвінок</a>\n
+`, { parse_mode: "HTML" }
+    );
+
+    const linkToYoutube = ` 
+          <b>За цим посиланням ви можете преглянути записи з майстер-класів</b>
+          
+          <a href="https://www.youtube.com/watch?v=8YBih1RpXuc&list=PLwhaTSFH9dx-gBnmy6S2u63sI4s21IB0q">Майстер-класи</a>`;
+    await bot.sendMessage(msg.chat.id, linkToYoutube, { parse_mode: "HTML" });
+  }
+
   async function sendSupportRequestMessage(msg) {
     const chatId = msg.chat.id;
     if (isFirstMenuCall) {
@@ -427,30 +416,34 @@ module.exports = function (io) {
       const recipientResponse = await waitForReply(chatId);
       const recipientName = recipientResponse.text;
 
-      bot.sendMessage(
-        chatId,
+      await bot.sendMessage(
+        msg.chat.id,
         "Будь-ласка, вкажіть ваш контактий номер телефону:",
         {
           force_reply: true,
+          reply_markup: {
+            keyboard: [
+              [{ text: "Надати номер телефону", request_contact: true }],
+            ],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          },
         }
       );
 
-      const recipientPhoneResponse = await waitForReply(chatId);
-      const recipientPhone = recipientPhoneResponse.text;
+      const contact = await waitForContact(chatId);
 
-      bot.sendMessage(
-        chatId,
-        "Будь-ласка, вкажіть адресу електронної пошти телефону:",
-        {
-          force_reply: true,
-        }
-      );
+      // const recipientPhoneResponse = await waitForReply(chatId);
+      const recipientPhone = contact.contact.phone_number;
+
+      bot.sendMessage(chatId, "Будь-ласка, вкажіть адресу електронної пошти:", {
+        force_reply: true,
+      });
 
       const recipientEmailResponse = await waitForReply(chatId);
       const recipientEmail = recipientEmailResponse.text;
 
-      bot.sendMessage(chatId, "Будь-ласка, детально опишіть проблему:",
-      {
+      bot.sendMessage(chatId, "Будь-ласка, детально опишіть проблему:", {
         force_reply: true,
       });
 
@@ -492,8 +485,30 @@ module.exports = function (io) {
     }
   }
 
+  function waitForContact(chatId) {
+    return new Promise((resolve) => {
+      bot.once("contact", (contact) => {
+        resolve(contact);
+      });
+    });
+  }
+
+  async function sendExercisesWithDiagnosis(msg, diagnosis) {
+    for (const exercise of trainingEcercisesMobile) {
+      if (exercise.diagnosis.includes(diagnosis)) {
+        await bot.sendPhoto(msg.chat.id, exercise.img_url, {
+          caption: `<b>Назва вправи:</b> ${exercise.name} \n\n <b>Опис:</b> ${exercise.description} \n\n <b>Когнітивна функція:</b> ${exercise.cognitive_function}`,
+          parse_mode: "HTML",
+        });
+      }
+    }
+  }
+
   bot.on("text", async (msg) => {
     try {
+      const userId = msg.chat.id;
+      const commandName = msg.text;
+
       switch (msg.text) {
         case "/start":
           await bot.sendChatAction(msg.chat.id, "typing");
@@ -504,7 +519,7 @@ module.exports = function (io) {
           break;
         case "📝 Запит на навчання":
           await bot.sendChatAction(msg.chat.id, "typing");
-          await closeMenu(msg);
+          // await closeMenu(msg);
           await trainingRequest(msg);
           break;
         case "🆘 Запит технічної допомоги":
@@ -534,6 +549,41 @@ module.exports = function (io) {
         case "🧑🏻‍⚕️📱 Інструкція для пацієнта до мобільного пристрою":
           await sendDocument(msg, "./files/Patients_mobile_app_manual.pdf");
           break;
+        case "⚡ Вправи":
+          sendExercisesInfo(msg);
+          break;
+        case "Хвороба Альцгеймера":
+          await bot.sendChatAction(msg.chat.id, "typing");
+          await sendExercisesWithDiagnosis(msg, "Хвороба Альцгеймера");
+          break;
+        case "Атаксія":
+          await bot.sendChatAction(msg.chat.id, "typing");
+          await sendExercisesWithDiagnosis(msg, "Атаксія");
+          break;
+        case "Дитячий церебральний параліч":
+          await bot.sendChatAction(msg.chat.id, "typing");
+          await sendExercisesWithDiagnosis(msg, "Дитячий церебральний параліч");
+          break;
+        case "Розсіяний склероз":
+          await bot.sendChatAction(msg.chat.id, "typing");
+          await sendExercisesWithDiagnosis(msg, "Розсіяний склероз");
+          break;
+        case "Хвороба Паркінсона":
+          await bot.sendChatAction(msg.chat.id, "typing");
+          await sendExercisesWithDiagnosis(msg, "Хвороба Паркінсона");
+          break;
+        case "Інсульт":
+          await bot.sendChatAction(msg.chat.id, "typing");
+          await sendExercisesWithDiagnosis(msg, "Інсульт");
+          break;
+        case "Травма спинного мозку":
+          await bot.sendChatAction(msg.chat.id, "typing");
+          await sendExercisesWithDiagnosis(msg, "Травма спинного мозку");
+          break;
+        case "Черепно-мозкова травма":
+          await bot.sendChatAction(msg.chat.id, "typing");
+          await sendExercisesWithDiagnosis(msg, "Черепно-мозкова травма");
+          break;
         case "ℹ️ Корисна інформація":
           await sendInfoMenu(msg);
           break;
@@ -545,10 +595,15 @@ module.exports = function (io) {
           await bot.sendChatAction(msg.chat.id, "typing");
           await sendMessages(msg, "text");
           break;
+        case "🎓 Майстер-класи":
+          await bot.sendChatAction(msg.chat.id, "typing");
+          await sendMasterClassesList(msg);
+          break;
         default:
           // await bot.sendMessage(msg.chat.id, 'fsdfs');
           break;
       }
+      await saveClickedButton(userId, commandName);
     } catch (error) {
       console.log(error);
     }

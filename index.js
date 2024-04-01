@@ -9,6 +9,7 @@ const { Server } = require("socket.io");
 
 const trainingRequestRoutes = require("./routes/trainingRequestRoutes.js");
 const supportRequestRoutes = require("./routes/supportRequestRoutes.js");
+const trackingBtnsRoutes = require("./routes/trackingBtnsRoutes.js");
 dotenv.config();
 
 const token = process.env.TELEGRAM_TOKEN;
@@ -56,6 +57,7 @@ const bot = require("./bot.js")(io);
 
 app.use("/api", trainingRequestRoutes);
 app.use("/api", supportRequestRoutes);
+app.use("/api", trackingBtnsRoutes);
 
 // Handle webhook events
 app.post("/webhook", (req, res) => {
